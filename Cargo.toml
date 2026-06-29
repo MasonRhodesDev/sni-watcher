@@ -1,0 +1,23 @@
+[package]
+name = "sni-watcher"
+version = "0.1.0"
+edition = "2021"
+description = "A standalone StatusNotifierWatcher daemon so the system-tray registry survives bar restarts"
+license = "MIT"
+
+[[bin]]
+name = "sni-watcher"
+path = "src/main.rs"
+
+[dependencies]
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
+anyhow = "1"
+futures-util = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1

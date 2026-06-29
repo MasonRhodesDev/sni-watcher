@@ -1,0 +1,14 @@
+[Unit]
+Description=Standalone StatusNotifierWatcher (system tray registry)
+Documentation=https://www.freedesktop.org/wiki/Specifications/StatusNotifierItem/
+PartOf=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=org.kde.StatusNotifierWatcher
+ExecStart=%h/.cargo/bin/sni-watcher
+Restart=on-failure
+RestartSec=1
+
+[Install]
+WantedBy=graphical-session.target
