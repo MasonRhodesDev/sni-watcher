@@ -28,43 +28,36 @@ the still-intact registry. Nothing has to re-register, so Slack stays put.
 Verified: with this daemon owning the watcher, restarting Waybar — and a full
 `hyprctl reload` — leaves the registered-item set completely unchanged.
 
-## Build & install
+## Install (COPR)
 
 ```sh
-cargo install --path .          # -> ~/.cargo/bin/sni-watcher
-```
-
-## Run it as a user service (started before Waybar)
-
-Install the unit:
-
-```sh
-cp contrib/sni-watcher.service ~/.config/systemd/user/
-systemctl --user daemon-reload
+sudo dnf copr enable solaris765/sni-watcher
+sudo dnf install sni-watcher
 systemctl --user enable --now sni-watcher.service
 ```
 
-`Type=dbus` means systemd considers the service "started" only once it owns
-`org.kde.StatusNotifierWatcher` — so anything ordered `After=` it is guaranteed to find
-the watcher already present.
+The package ships a systemd **user** service and a preset that enables it. The unit is
+`Type=dbus` with `BusName=org.kde.StatusNotifierWatcher`, so systemd considers it
+"started" only once it owns the name; its `Before=waybar.service` ordering then
+guarantees the watcher is up before Waybar attaches. No Waybar config change is needed —
+its `tray` module auto-detects the existing watcher and becomes a host, and the
+freeze-on-reload restart workaround stays harmless to the tray.
 
-Then make Waybar start after it, via a drop-in
-(`~/.config/systemd/user/waybar.service.d/sni-watcher.conf`):
+## Build / release
 
-```ini
-[Unit]
-After=sni-watcher.service
-Wants=sni-watcher.service
-```
+Packaging follows the `cargo-rpm-macros` + vendored-deps pattern (spec in
+`packaging/`, units in `dist/`):
 
 ```sh
-systemctl --user daemon-reload
-systemctl --user restart sni-watcher.service waybar.service
+# bump Version in Cargo.toml and packaging/sni-watcher.spec (keep them in sync),
+# then:
+git tag v0.1.0 && git push --tags
+packaging/build-srpm.sh           # SRPM from the tag + vendored cargo deps
+packaging/build-srpm.sh --copr    # ...and submit to COPR (solaris765/sni-watcher)
+packaging/build-srpm.sh --head    # build an SRPM from HEAD for local testing
 ```
 
-No Waybar config change is needed — its `tray` module auto-detects the existing watcher
-and becomes a host. The freeze-on-reload workaround (restarting Waybar) can stay exactly
-as it is; it's now harmless to the tray.
+For a quick local binary (no packaging): `cargo install --path .`.
 
 ## Verify
 

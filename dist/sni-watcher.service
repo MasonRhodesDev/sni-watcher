@@ -1,0 +1,22 @@
+[Unit]
+Description=Standalone StatusNotifierWatcher (system tray registry)
+Documentation=https://github.com/MasonRhodesDev/sni-watcher
+After=graphical-session.target
+PartOf=graphical-session.target
+Requisite=graphical-session.target
+# Own org.kde.StatusNotifierWatcher before the bar starts, so the bar attaches
+# as a host-only client. Equivalent to a waybar.service After=/Wants= drop-in,
+# but self-contained — Waybar's own unit is left untouched.
+Before=waybar.service
+
+[Service]
+Type=dbus
+BusName=org.kde.StatusNotifierWatcher
+ExecStart=/usr/bin/sni-watcher
+Restart=on-failure
+RestartSec=1
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical-session.target
