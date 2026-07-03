@@ -1,0 +1,48 @@
+# Maintainer: Mason Rhodes <mrhodesdev@gmail.com>
+#
+# Arch package for sni-watcher. Same payload as the Fedora RPM
+# (packaging/sni-watcher.spec); all paths are identical across both distros.
+# Usable directly with makepkg from this directory after a release tag is
+# pushed, or published to the AUR (regenerate .SRCINFO with
+# `makepkg --printsrcinfo > .SRCINFO` on every change).
+
+pkgname=sni-watcher
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Standalone StatusNotifierWatcher daemon so the tray registry survives bar restarts"
+arch=('x86_64')
+url="https://github.com/MasonRhodesDev/sni-watcher"
+license=('MIT')
+install="$pkgname.install"
+depends=('dbus')
+makedepends=('cargo')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP') # pin on release: updpkgsums
+
+prepare() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo test --frozen --release
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 "target/release/$pkgname" "$pkgdir/usr/bin/$pkgname"
+  install -Dm644 dist/sni-watcher.service "$pkgdir/usr/lib/systemd/user/sni-watcher.service"
+  install -Dm644 dist/90-sni-watcher.user.preset "$pkgdir/usr/lib/systemd/user-preset/90-sni-watcher.preset"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

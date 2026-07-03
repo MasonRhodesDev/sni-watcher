@@ -28,11 +28,34 @@ the still-intact registry. Nothing has to re-register, so Slack stays put.
 Verified: with this daemon owning the watcher, restarting Waybar — and a full
 `hyprctl reload` — leaves the registered-item set completely unchanged.
 
-## Install (COPR)
+## Install
+
+Packaged install only (Arch / Fedora COPR). The binary is built with `cargo
+build --release`; the user unit and preset are installed from `dist/` by the
+PKGBUILD / spec.
+
+**Arch** — add the `[mason]` repo to `/etc/pacman.conf`, then install:
+
+```ini
+[mason]
+SigLevel = Optional TrustAll
+Server = https://masonrhodesdev.github.io/arch-repo/x86_64
+```
+
+```sh
+sudo pacman -Sy sni-watcher
+```
+
+**Fedora**
 
 ```sh
 sudo dnf copr enable solaris765/sni-watcher
 sudo dnf install sni-watcher
+```
+
+Then enable the service:
+
+```sh
 systemctl --user enable --now sni-watcher.service
 ```
 
@@ -45,12 +68,14 @@ freeze-on-reload restart workaround stays harmless to the tray.
 
 ## Build / release
 
-Packaging follows the `cargo-rpm-macros` + vendored-deps pattern (spec in
-`packaging/`, units in `dist/`):
+Packaging follows the `cargo-rpm-macros` + vendored-deps pattern (spec and
+PKGBUILD in `packaging/`, units in `dist/`). Cargo.toml is the version source
+of truth; `build-srpm.sh` gates on spec Version == Cargo.toml == Cargo.lock ==
+PKGBUILD pkgver.
 
 ```sh
-# bump Version in Cargo.toml and packaging/sni-watcher.spec (keep them in sync),
-# then:
+# bump the version in Cargo.toml, packaging/sni-watcher.spec, and
+# packaging/PKGBUILD (keep them in sync), then:
 git tag v0.1.0 && git push --tags
 packaging/build-srpm.sh           # SRPM from the tag + vendored cargo deps
 packaging/build-srpm.sh --copr    # ...and submit to COPR (solaris765/sni-watcher)
