@@ -1,7 +1,7 @@
 # RPM spec for sni-watcher. Built in COPR from a local SRPM produced by
 # packaging/build-srpm.sh (source tarball from the git tag + vendored cargo
 # deps as Source1 — no rust-*-devel packages needed).
-%bcond_with check
+%bcond_without check
 
 Name:           sni-watcher
 Version:        0.1.0

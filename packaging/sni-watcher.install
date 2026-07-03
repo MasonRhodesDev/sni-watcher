@@ -1,0 +1,7 @@
+# Arch does not auto-apply systemd presets, so enabling the user service is
+# left to the user (the Fedora RPM's %systemd_user_post applies the preset).
+
+post_install() {
+    echo "==> Enable the tray watcher with:"
+    echo "==>   systemctl --user enable --now sni-watcher.service"
+}
