@@ -7,7 +7,7 @@
 # `makepkg --printsrcinfo > .SRCINFO` on every change).
 
 pkgname=sni-watcher
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc="Standalone StatusNotifierWatcher daemon so the tray registry survives bar restarts"
 arch=('x86_64')

@@ -1,6 +1,6 @@
 [package]
 name = "sni-watcher"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A standalone StatusNotifierWatcher daemon so the system-tray registry survives bar restarts"
 license = "MIT"

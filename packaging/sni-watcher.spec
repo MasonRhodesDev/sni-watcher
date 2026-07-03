@@ -4,7 +4,7 @@
 %bcond_without check
 
 Name:           sni-watcher
-Version:        0.1.0
+Version:        0.1.1
 Release:        1%{?dist}
 Summary:        Standalone StatusNotifierWatcher daemon for a persistent system tray
 License:        MIT
@@ -61,6 +61,9 @@ install -Dpm0644 dist/90-sni-watcher.user.preset %{buildroot}%{_userpresetdir}/9
 %{_userpresetdir}/90-sni-watcher.preset
 
 %changelog
+* Fri Jul 03 2026 Mason Rhodes <mrhodesdev@gmail.com> - 0.1.1-1
+- Standardized packaging release: shared CI, arch-repo + COPR pipeline
+
 * Mon Jun 29 2026 Mason Rhodes <mrhodesdev@gmail.com> - 0.1.0-1
 - Initial release: standalone StatusNotifierWatcher daemon so the tray registry
   survives Waybar restarts (fixes Slack vanishing after hyprctl reload)
