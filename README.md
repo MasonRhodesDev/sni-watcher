@@ -28,6 +28,34 @@ the still-intact registry. Nothing has to re-register, so Slack stays put.
 Verified: with this daemon owning the watcher, restarting Waybar — and a full
 `hyprctl reload` — leaves the registered-item set completely unchanged.
 
+All of the below is session-bus D-Bus traffic:
+
+```mermaid
+flowchart LR
+    subgraph items["Items"]
+        slack["Slack"]
+        discord["Discord"]
+        idle["logind-idle-control-tray"]
+    end
+
+    subgraph daemon["sni-watcher — systemd user service (Type=dbus, Before=waybar.service)"]
+        watcher["org.kde.StatusNotifierWatcher<br/>/StatusNotifierWatcher"]
+        evict["zbus NameOwnerChanged stream"]
+    end
+
+    subgraph hosts["Hosts"]
+        waybar["Waybar tray module<br/>(restartable — registry survives)"]
+    end
+
+    slack -- "RegisterStatusNotifierItem" --> watcher
+    discord -- "RegisterStatusNotifierItem" --> watcher
+    idle -- "RegisterStatusNotifierItem" --> watcher
+    evict -- "item's bus connection dropped → evict registration" --> watcher
+    waybar -- "RegisterStatusNotifierHost" --> watcher
+    watcher -- "RegisteredStatusNotifierItems property (re-read on every bar start)" --> waybar
+    watcher -- "StatusNotifierItemRegistered / Unregistered signals" --> waybar
+```
+
 ## Install
 
 Packaged install only (Arch / Fedora COPR). The binary is built with `cargo
