@@ -17,7 +17,7 @@ install="$pkgname.install"
 depends=('dbus')
 makedepends=('cargo')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('SKIP') # pin on release: updpkgsums
+sha256sums=('dbe1055f5f64a28a6fa972ef6cb1c7a2c247343b1df1865ddacdd32089d5bcde')
 
 prepare() {
   cd "$pkgname-$pkgver"
