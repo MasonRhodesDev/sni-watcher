@@ -8,6 +8,11 @@ Requisite=graphical-session.target
 # as a host-only client. Equivalent to a waybar.service After=/Wants= drop-in,
 # but self-contained — Waybar's own unit is left untouched.
 Before=waybar.service
+# XDG autostart apps (systemd-xdg-autostart-generator units) are ordered after
+# this target; being before it means those apps find the watcher already up.
+# The D-Bus activation file in dist/ covers apps started outside systemd
+# ordering (compositor exec-once, uwsm app) by starting this unit on demand.
+Before=xdg-desktop-autostart.target
 
 [Service]
 Type=dbus

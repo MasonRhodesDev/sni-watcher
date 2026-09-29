@@ -37,12 +37,17 @@ struct Registration {
 
 impl Registration {
     /// Resolve a `RegisterStatusNotifierItem` argument into a registration.
-    /// `service` is either an object path (the item lives on the sender's
-    /// connection) or a bus name (the item lives at the well-known path).
+    /// `service` is an object path (the item lives on the sender's connection),
+    /// a bus name (the item lives at the well-known path), or `busname/path`
+    /// (current Chromium, and so Slack since its 2026-09 Electron: e.g.
+    /// `org.freedesktop.StatusNotifierItem-947574-1/StatusNotifierItem/1`).
     fn for_item(service: &str, sender: &str) -> Registration {
         let (advertised_service, path) = if service.starts_with('/') {
             // sender's connection hosts the item at the given path
             (sender.to_string(), service.to_string())
+        } else if let Some(slash) = service.find('/') {
+            // bus name and object path in one string; keep both as given
+            (service[..slash].to_string(), service[slash..].to_string())
         } else {
             // `service` is a bus name; item lives at the well-known path
             (service.to_string(), DEFAULT_ITEM_PATH.to_string())
@@ -171,9 +176,18 @@ impl Watcher {
             .collect()
     }
 
+    /// Always `true`. The only host here is the bar, and the bar restarts
+    /// (hyprctl reload, config reloads, crashes), leaving no host for a few
+    /// hundred milliseconds each time. Chromium, and so every Electron app,
+    /// reads this property exactly once when it creates its tray icon and gives
+    /// up for the lifetime of the process on `false`. Slack did exactly that at
+    /// login on 2026-09-28: its tray init landed inside a 224 ms Waybar restart
+    /// window and the icon never appeared. A watcher whose purpose is to outlive
+    /// the bar answers for the bar: a host will be here. Items registered while
+    /// no bar runs are shown as soon as one attaches; nothing is lost.
     #[zbus(property)]
     async fn is_status_notifier_host_registered(&self) -> bool {
-        !self.hosts.lock().unwrap().is_empty()
+        true
     }
 
     #[zbus(property)]
@@ -214,9 +228,11 @@ async fn handle_name_lost(
         tracing::info!(%entry, "item unregistered (owner left the bus)");
         Watcher::status_notifier_item_unregistered(emitter, entry).await?;
     }
+    // Logged only. No StatusNotifierHostUnregistered signal: a bar restart is
+    // transient by design, and IsStatusNotifierHostRegistered stays true (see
+    // the property for why).
     if host_now_empty {
         tracing::info!("last host left the bus");
-        Watcher::status_notifier_host_unregistered(emitter).await?;
     }
     Ok(())
 }
@@ -325,6 +341,21 @@ mod tests {
         let r = Registration::for_item("/StatusNotifierItem", ":1.42");
         assert_eq!(r.entry, ":1.42/StatusNotifierItem");
         assert_eq!(r.owner, ":1.42");
+    }
+
+    #[test]
+    fn for_item_bus_name_with_path_keeps_the_path() {
+        // Chromium/Electron (Slack, 2026-09) registers "busname/path". 0.1.1
+        // appended the default path to it and Waybar rejected the item.
+        let r = Registration::for_item(
+            "org.freedesktop.StatusNotifierItem-947574-1/StatusNotifierItem/1",
+            ":1.500",
+        );
+        assert_eq!(
+            r.entry,
+            "org.freedesktop.StatusNotifierItem-947574-1/StatusNotifierItem/1"
+        );
+        assert_eq!(r.owner, ":1.500");
     }
 
     #[test]

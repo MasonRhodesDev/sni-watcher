@@ -1,0 +1,11 @@
+# D-Bus activation for the tray registry. A client that calls
+# org.kde.StatusNotifierWatcher (or StartServiceByName on it) before
+# sni-watcher.service owns the name makes the session bus start the unit and
+# deliver the call. Chromium/Electron only asks NameHasOwner, which does not
+# activate, so for those the unit ordering (Before=xdg-desktop-autostart.target)
+# and the always-true IsStatusNotifierHostRegistered property are what matter;
+# this file covers every other client.
+[D-BUS Service]
+Name=org.kde.StatusNotifierWatcher
+Exec=/usr/bin/sni-watcher
+SystemdService=sni-watcher.service

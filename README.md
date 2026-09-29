@@ -28,33 +28,53 @@ the still-intact registry. Nothing has to re-register, so Slack stays put.
 Verified: with this daemon owning the watcher, restarting Waybar — and a full
 `hyprctl reload` — leaves the registered-item set completely unchanged.
 
-All of the below is session-bus D-Bus traffic:
+## The host-registered race (fixed in 0.2.0)
 
-```mermaid
-flowchart LR
-    subgraph items["Items"]
-        slack["Slack"]
-        discord["Discord"]
-        idle["logind-idle-control-tray"]
-    end
+Chromium, and therefore every Electron app, creates its tray icon once. It asks
+the bus `NameHasOwner("org.kde.StatusNotifierWatcher")`, then reads the
+watcher's `IsStatusNotifierHostRegistered` property, and on `false` from either
+it gives up for the lifetime of the process (Chromium's
+`status_icon_linux_dbus.cc`, `OnImplInitializationFailed`). It never retries and
+never listens for `StatusNotifierHostRegistered`.
 
-    subgraph daemon["sni-watcher — systemd user service (Type=dbus, Before=waybar.service)"]
-        watcher["org.kde.StatusNotifierWatcher<br/>/StatusNotifierWatcher"]
-        evict["zbus NameOwnerChanged stream"]
-    end
+The bar is the only host, and the bar restarts. Observed at login on 2026-09-28:
 
-    subgraph hosts["Hosts"]
-        waybar["Waybar tray module<br/>(restartable — registry survives)"]
-    end
+| Time | Event |
+|---|---|
+| 14:26:39.815 | sni-watcher owns the name |
+| 14:26:40.390 | Waybar restarts: last host left the bus |
+| 14:26:40.469 | Slack creates its tray icon |
+| 14:26:40.614 | Waybar's new host registers |
 
-    slack -- "RegisterStatusNotifierItem" --> watcher
-    discord -- "RegisterStatusNotifierItem" --> watcher
-    idle -- "RegisterStatusNotifierItem" --> watcher
-    evict -- "item's bus connection dropped → evict registration" --> watcher
-    waybar -- "RegisterStatusNotifierHost" --> watcher
-    watcher -- "RegisteredStatusNotifierItems property (re-read on every bar start)" --> waybar
-    watcher -- "StatusNotifierItemRegistered / Unregistered signals" --> waybar
-```
+Slack read `IsStatusNotifierHostRegistered` inside that 224 ms window, got
+`false`, and had no tray icon until the next Slack restart.
+
+0.2.0 closes this three ways:
+
+- `IsStatusNotifierHostRegistered` is always `true`, and the watcher no longer
+  emits `StatusNotifierHostUnregistered` when the bar restarts. The watcher
+  exists to outlive the bar, so it answers for the bar: a host will be here.
+  Items registered while no bar runs are shown as soon as one attaches;
+  nothing is lost.
+- The unit is ordered `Before=xdg-desktop-autostart.target`, so XDG autostart
+  apps find the name owned (the `NameHasOwner` half of Chromium's check).
+- `dist/org.kde.StatusNotifierWatcher.service` makes the name D-Bus
+  activatable (`SystemdService=sni-watcher.service`) for clients that call it
+  before the unit is up. Chromium does not, so this is not what fixes Electron
+  apps; it covers everything else.
+
+Apps started by the compositor (`exec-once`, `uwsm app`) run outside systemd
+ordering. For those, the always-true property is the load-bearing fix.
+
+### Registration strings with a path (fixed in 0.2.0)
+
+Current Chromium, and so Slack since its 2026-09 Electron update, registers
+`org.freedesktop.StatusNotifierItem-<pid>-1/StatusNotifierItem/1`: bus name
+and object path in one string. 0.1.1 treated anything not starting with `/` as
+a bare bus name and appended `/StatusNotifierItem`, so Waybar received
+`.../StatusNotifierItem/1/StatusNotifierItem`, logged
+`Invalid Status Notifier Item`, and drew nothing. 0.2.0 splits at the first
+`/` and keeps both halves as given, which is what Waybar's own watcher does.
 
 ## Install
 

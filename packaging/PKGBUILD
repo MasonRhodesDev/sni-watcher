@@ -7,7 +7,7 @@
 # `makepkg --printsrcinfo > .SRCINFO` on every change).
 
 pkgname=sni-watcher
-pkgver=0.1.1
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="Standalone StatusNotifierWatcher daemon so the tray registry survives bar restarts"
 arch=('x86_64')
@@ -43,6 +43,7 @@ package() {
   install -Dm755 "target/release/$pkgname" "$pkgdir/usr/bin/$pkgname"
   install -Dm644 dist/sni-watcher.service "$pkgdir/usr/lib/systemd/user/sni-watcher.service"
   install -Dm644 dist/90-sni-watcher.user.preset "$pkgdir/usr/lib/systemd/user-preset/90-sni-watcher.preset"
+  install -Dm644 dist/org.kde.StatusNotifierWatcher.service "$pkgdir/usr/share/dbus-1/services/org.kde.StatusNotifierWatcher.service"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
 }

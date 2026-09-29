@@ -4,7 +4,7 @@
 %bcond_without check
 
 Name:           sni-watcher
-Version:        0.1.1
+Version:        0.2.0
 Release:        1%{?dist}
 Summary:        Standalone StatusNotifierWatcher daemon for a persistent system tray
 License:        MIT
@@ -38,6 +38,7 @@ bar attaches as a host-only client and re-reads the intact registry.
 %cargo_install
 install -Dpm0644 dist/sni-watcher.service %{buildroot}%{_userunitdir}/sni-watcher.service
 install -Dpm0644 dist/90-sni-watcher.user.preset %{buildroot}%{_userpresetdir}/90-sni-watcher.preset
+install -Dpm0644 dist/org.kde.StatusNotifierWatcher.service %{buildroot}%{_datadir}/dbus-1/services/org.kde.StatusNotifierWatcher.service
 
 %if %{with check}
 %check
@@ -59,8 +60,24 @@ install -Dpm0644 dist/90-sni-watcher.user.preset %{buildroot}%{_userpresetdir}/9
 %{_bindir}/sni-watcher
 %{_userunitdir}/sni-watcher.service
 %{_userpresetdir}/90-sni-watcher.preset
+%{_datadir}/dbus-1/services/org.kde.StatusNotifierWatcher.service
 
 %changelog
+* Tue Sep 29 2026 Mason Rhodes <mrhodesdev@gmail.com> - 0.2.0-1
+- IsStatusNotifierHostRegistered is always true and the watcher no longer
+  emits StatusNotifierHostUnregistered on a bar restart. Chromium/Electron
+  reads the property once at tray creation and gives up on false; Slack's
+  tray init landed inside a 224 ms Waybar restart window at login
+  (2026-09-28) and the icon never appeared.
+- Order the unit before xdg-desktop-autostart.target so XDG autostart apps
+  find the name owned.
+- Ship a D-Bus activation file for org.kde.StatusNotifierWatcher
+  (SystemdService=sni-watcher.service) for clients that call the name before
+  the unit is up.
+- Parse "busname/path" registration strings (current Chromium/Electron,
+  Slack since 2026-09) as bus name plus object path. 0.1.1 appended
+  /StatusNotifierItem to them and Waybar rejected the item.
+
 * Fri Jul 03 2026 Mason Rhodes <mrhodesdev@gmail.com> - 0.1.1-1
 - Standardized packaging release: shared CI, arch-repo + COPR pipeline
 
