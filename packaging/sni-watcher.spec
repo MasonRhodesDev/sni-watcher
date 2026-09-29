@@ -4,7 +4,7 @@
 %bcond_without check
 
 Name:           sni-watcher
-Version:        0.2.0
+Version:        0.2.1
 Release:        1%{?dist}
 Summary:        Standalone StatusNotifierWatcher daemon for a persistent system tray
 License:        MIT
@@ -52,7 +52,12 @@ install -Dpm0644 dist/org.kde.StatusNotifierWatcher.service %{buildroot}%{_datad
 %systemd_user_preun sni-watcher.service
 
 %postun
-%systemd_user_postun_with_restart sni-watcher.service
+# No restart on upgrade. Chromium/Electron trays treat a failed
+# RegisterStatusNotifierItem as fatal for the process lifetime, and a watcher
+# restart while the bar runs hands the name through the bar for a moment.
+# The running instance keeps working; the new binary takes over at next login
+# or via the documented restart recipe in README.md.
+%systemd_user_postun sni-watcher.service
 
 %files
 %license LICENSE LICENSE.dependencies
@@ -63,6 +68,13 @@ install -Dpm0644 dist/org.kde.StatusNotifierWatcher.service %{buildroot}%{_datad
 %{_datadir}/dbus-1/services/org.kde.StatusNotifierWatcher.service
 
 %changelog
+* Tue Sep 29 2026 Mason Rhodes <mrhodesdev@gmail.com> - 0.2.1-1
+- Package upgrades no longer restart the running watcher. The 0.2.0 upgrade
+  restarted it while Waybar was running; the name passed through Waybar for a
+  moment, Slack's re-registration failed, and Chromium treats that as fatal
+  for the process lifetime. The new binary takes over at next login or via
+  the restart recipe in the README (stop the bar first).
+
 * Tue Sep 29 2026 Mason Rhodes <mrhodesdev@gmail.com> - 0.2.0-1
 - IsStatusNotifierHostRegistered is always true and the watcher no longer
   emits StatusNotifierHostUnregistered on a bar restart. Chromium/Electron

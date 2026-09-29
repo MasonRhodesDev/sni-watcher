@@ -76,6 +76,23 @@ a bare bus name and appended `/StatusNotifierItem`, so Waybar received
 `Invalid Status Notifier Item`, and drew nothing. 0.2.0 splits at the first
 `/` and keeps both halves as given, which is what Waybar's own watcher does.
 
+## Restarting the watcher (read before you do)
+
+A restart of sni-watcher is itself the hazard this daemon exists to remove.
+Chromium/Electron apps re-register on the new name owner, but treat one failed
+`RegisterStatusNotifierItem` as fatal for the process lifetime. While Waybar
+runs it holds a queued claim on the name, so a restart hands the name to
+Waybar's in-process watcher for a moment and then back; observed 2026-09-29,
+that round trip lost Slack's icon until Slack restarted. Package upgrades
+therefore do not restart the unit (since 0.2.1). To pick up a new binary now:
+
+```sh
+systemctl --user stop waybar && systemctl --user restart sni-watcher && systemctl --user start waybar
+```
+
+With the bar stopped nothing else claims the name; items re-register against
+the new instance and Electron apps keep their icons.
+
 ## Install
 
 Packaged install only (Arch / Fedora COPR). The binary is built with `cargo
