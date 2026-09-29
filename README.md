@@ -127,10 +127,25 @@ systemctl --user enable --now sni-watcher.service
 
 The package ships a systemd **user** service and a preset that enables it. The unit is
 `Type=dbus` with `BusName=org.kde.StatusNotifierWatcher`, so systemd considers it
-"started" only once it owns the name; its `Before=waybar.service` ordering then
-guarantees the watcher is up before Waybar attaches. No Waybar config change is needed —
-its `tray` module auto-detects the existing watcher and becomes a host, and the
-freeze-on-reload restart workaround stays harmless to the tray.
+"started" only once it owns the name. Since 0.3.0 it is wanted by
+`graphical-session-pre.target` and needs only `dbus.socket`, so it owns the name
+before the compositor session, the bar, and every autostart app exist. No Waybar
+config change is needed: its `tray` module auto-detects the existing watcher and
+becomes a host, and the freeze-on-reload restart workaround stays harmless to the tray.
+
+Upgrading from 0.2.x, run `systemctl --user reenable sni-watcher.service` once so the
+wants link moves from `graphical-session.target` to the new target.
+
+### Registry persistence (since 0.3.0)
+
+Every registration change is mirrored to `$XDG_RUNTIME_DIR/sni-watcher/items`
+(one `entry<TAB>owner` line per item, written atomically). At start the daemon
+reads it back, keeps the items whose bus connection still exists, serves them,
+and re-announces them with `StatusNotifierItemRegistered`. A crash, an
+`Restart=always` comeback, or a deliberate restart therefore returns with the
+same list, which covers apps that register exactly once. It does not cover an
+app whose registration call errored while the name had no owner; see the
+restart recipe above for how to avoid that.
 
 ## Build / release
 

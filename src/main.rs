@@ -17,6 +17,7 @@ use std::sync::Mutex;
 use anyhow::{Context, Result};
 use futures_util::StreamExt;
 use zbus::fdo::{DBusProxy, RequestNameFlags, RequestNameReply};
+use std::path::PathBuf;
 use zbus::message::Header;
 use zbus::names::WellKnownName;
 use zbus::object_server::SignalEmitter;
@@ -67,9 +68,72 @@ impl Registration {
 struct Watcher {
     items: Mutex<Vec<Registration>>,
     hosts: Mutex<Vec<Registration>>,
+    /// Where the item registry is mirrored on disk (`$XDG_RUNTIME_DIR/sni-watcher/items`).
+    /// `None` disables persistence.
+    state_path: Option<PathBuf>,
+}
+
+/// One item per line: `entry<TAB>owner`. Blank and malformed lines are skipped.
+fn parse_state(text: &str) -> Vec<Registration> {
+    text.lines()
+        .filter_map(|line| {
+            let (entry, owner) = line.split_once('\t')?;
+            if entry.is_empty() || owner.is_empty() {
+                return None;
+            }
+            Some(Registration {
+                entry: entry.to_string(),
+                owner: owner.to_string(),
+            })
+        })
+        .collect()
+}
+
+fn render_state(items: &[Registration]) -> String {
+    let mut out = String::new();
+    for r in items {
+        out.push_str(&r.entry);
+        out.push('\t');
+        out.push_str(&r.owner);
+        out.push('\n');
+    }
+    out
+}
+
+/// `$XDG_RUNTIME_DIR/sni-watcher/items`, or `None` when the runtime dir is unset.
+fn default_state_path() -> Option<PathBuf> {
+    let dir = std::env::var_os("XDG_RUNTIME_DIR")?;
+    Some(PathBuf::from(dir).join("sni-watcher").join("items"))
 }
 
 impl Watcher {
+    fn with_state(state_path: Option<PathBuf>, items: Vec<Registration>) -> Self {
+        Watcher {
+            items: Mutex::new(items),
+            hosts: Mutex::new(Vec::new()),
+            state_path,
+        }
+    }
+
+    /// Mirror the item registry to disk so a restart (crash, upgrade, reload)
+    /// comes back with the same list. Atomic: write a sibling, then rename.
+    /// Failures are logged, never fatal: the in-memory registry is the truth.
+    fn persist(&self) {
+        let Some(path) = &self.state_path else { return };
+        let text = render_state(&self.items.lock().unwrap());
+        let result = (|| -> std::io::Result<()> {
+            if let Some(dir) = path.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            let tmp = path.with_extension("tmp");
+            std::fs::write(&tmp, text)?;
+            std::fs::rename(&tmp, path)
+        })();
+        if let Err(err) = result {
+            tracing::warn!(%err, path = %path.display(), "could not persist the item registry");
+        }
+    }
+
     /// Track an item registration. Returns `false` (and changes nothing) when
     /// the exact entry is already registered.
     fn add_item(&self, registration: Registration) -> bool {
@@ -138,6 +202,7 @@ impl Watcher {
         }
 
         tracing::info!(%entry, "item registered");
+        self.persist();
         let _ = Self::status_notifier_item_registered(&emitter, &entry).await;
     }
 
@@ -222,6 +287,9 @@ async fn handle_name_lost(
     gone: &str,
 ) -> zbus::Result<()> {
     let (removed_items, host_now_empty) = iface_ref.get().await.evict_owner(gone);
+    if !removed_items.is_empty() {
+        iface_ref.get().await.persist();
+    }
 
     let emitter = iface_ref.signal_emitter();
     for entry in &removed_items {
@@ -248,15 +316,49 @@ async fn main() -> Result<()> {
 
     let name = WellKnownName::try_from(WATCHER_NAME).context("invalid well-known name")?;
 
-    // Serve the object first, then claim the name, so we answer correctly the instant
-    // anyone notices us.
     let conn = zbus::connection::Builder::session()
         .context("failed to connect to the session bus")?
-        .serve_at(WATCHER_PATH, Watcher::default())
-        .context("failed to register the watcher object")?
         .build()
         .await
         .context("failed to build the D-Bus connection")?;
+
+    // Restore the registry a previous instance mirrored to disk, keeping only
+    // items whose bus connection is still alive. Apps that register exactly
+    // once (Electron) are then still listed after a restart of this daemon.
+    let dbus = DBusProxy::new(&conn)
+        .await
+        .context("failed to create the org.freedesktop.DBus proxy")?;
+    let state_path = default_state_path();
+    let mut restored = Vec::new();
+    if let Some(path) = &state_path {
+        if let Ok(text) = std::fs::read_to_string(path) {
+            for r in parse_state(&text) {
+                let owner = zbus::names::BusName::try_from(r.owner.as_str());
+                let alive = match owner {
+                    Ok(name) => dbus.name_has_owner(name).await.unwrap_or(false),
+                    Err(_) => false,
+                };
+                if alive {
+                    tracing::info!(entry = %r.entry, "item restored from disk");
+                    restored.push(r);
+                } else {
+                    tracing::info!(entry = %r.entry, "stale item on disk, dropped");
+                }
+            }
+        }
+    } else {
+        tracing::warn!("XDG_RUNTIME_DIR unset; the item registry will not survive restarts");
+    }
+    let restored_entries: Vec<String> = restored.iter().map(|r| r.entry.clone()).collect();
+
+    // Serve the object first, then claim the name, so we answer correctly the instant
+    // anyone notices us.
+    let watcher = Watcher::with_state(state_path, restored);
+    watcher.persist();
+    conn.object_server()
+        .at(WATCHER_PATH, watcher)
+        .await
+        .context("failed to register the watcher object")?;
 
     let reply = conn
         .request_name_with_flags(
@@ -279,9 +381,6 @@ async fn main() -> Result<()> {
     }
 
     // Watch the bus for connections dropping so we can evict their registrations.
-    let dbus = DBusProxy::new(&conn)
-        .await
-        .context("failed to create the org.freedesktop.DBus proxy")?;
     let mut name_changes = dbus
         .receive_name_owner_changed()
         .await
@@ -293,7 +392,13 @@ async fn main() -> Result<()> {
         .await
         .context("failed to look up the served watcher interface")?;
 
-    tracing::info!("ready");
+    // Hosts that attached to the previous instance re-read the property when
+    // the name reappears; the signals cover hosts that only listen.
+    for entry in &restored_entries {
+        let _ = Watcher::status_notifier_item_registered(iface_ref.signal_emitter(), entry).await;
+    }
+
+    tracing::info!(restored = restored_entries.len(), "ready");
 
     loop {
         tokio::select! {
@@ -333,6 +438,27 @@ mod tests {
             entry: entry.to_string(),
             owner: owner.to_string(),
         }
+    }
+
+    #[test]
+    fn state_round_trips_and_skips_malformed_lines() {
+        let items = vec![
+            reg("org.freedesktop.StatusNotifierItem-1-1/StatusNotifierItem/1", ":1.500"),
+            reg(":1.132/org/ayatana/NotificationItem/indicator_solaar", ":1.132"),
+        ];
+        let text = render_state(&items);
+        let back = parse_state(&format!("{text}\nno-tab-here\n\t:1.9\n"));
+        assert_eq!(back.len(), 2);
+        assert_eq!(back[0].entry, items[0].entry);
+        assert_eq!(back[0].owner, ":1.500");
+        assert_eq!(back[1].entry, items[1].entry);
+    }
+
+    #[test]
+    fn persist_is_a_noop_without_a_state_path() {
+        let w = Watcher::default();
+        w.add_item(reg("x/StatusNotifierItem", ":1.1"));
+        w.persist(); // must not panic or touch the filesystem
     }
 
     #[test]

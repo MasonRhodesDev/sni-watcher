@@ -4,7 +4,7 @@
 %bcond_without check
 
 Name:           sni-watcher
-Version:        0.2.1
+Version:        0.3.0
 Release:        1%{?dist}
 Summary:        Standalone StatusNotifierWatcher daemon for a persistent system tray
 License:        MIT
@@ -68,6 +68,18 @@ install -Dpm0644 dist/org.kde.StatusNotifierWatcher.service %{buildroot}%{_datad
 %{_datadir}/dbus-1/services/org.kde.StatusNotifierWatcher.service
 
 %changelog
+* Tue Sep 29 2026 Mason Rhodes <mrhodesdev@gmail.com> - 0.3.0-1
+- Start before graphical-session-pre.target (WantedBy it, After=dbus.socket
+  only). At the previous login the watcher started 27 ms after Slack and in
+  the same batch as every XDG autostart app; now it owns the name before any
+  of them exist. Upgrading from 0.2.x: run
+  `systemctl --user reenable sni-watcher.service` once so the wants link
+  moves to the new target.
+- Mirror the item registry to $XDG_RUNTIME_DIR/sni-watcher/items on every
+  change and restore it at start, keeping items whose bus connection is
+  still alive. A crash or restart comes back with the same list.
+- Restart=always, RestartSec=0, OOMScoreAdjust=-900.
+
 * Tue Sep 29 2026 Mason Rhodes <mrhodesdev@gmail.com> - 0.2.1-1
 - Package upgrades no longer restart the running watcher. The 0.2.0 upgrade
   restarted it while Waybar was running; the name passed through Waybar for a

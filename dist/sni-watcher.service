@@ -1,27 +1,27 @@
 [Unit]
 Description=Standalone StatusNotifierWatcher (system tray registry)
 Documentation=https://github.com/MasonRhodesDev/sni-watcher
-After=graphical-session.target
+# Needs only the session bus, so it runs before the graphical session is up:
+# every app, the bar and the XDG autostart target then find the name already
+# owned. Stops with the session (PartOf), never gates it (no Requisite).
+After=dbus.socket
+Before=graphical-session-pre.target
 PartOf=graphical-session.target
-Requisite=graphical-session.target
-# Own org.kde.StatusNotifierWatcher before the bar starts, so the bar attaches
-# as a host-only client. Equivalent to a waybar.service After=/Wants= drop-in,
-# but self-contained — Waybar's own unit is left untouched.
-Before=waybar.service
-# XDG autostart apps (systemd-xdg-autostart-generator units) are ordered after
-# this target; being before it means those apps find the watcher already up.
-# The D-Bus activation file in dist/ covers apps started outside systemd
-# ordering (compositor exec-once, uwsm app) by starting this unit on demand.
-Before=xdg-desktop-autostart.target
+# Belt and braces for units that start in the same transaction.
+Before=waybar.service xdg-desktop-autostart.target
 
 [Service]
 Type=dbus
 BusName=org.kde.StatusNotifierWatcher
 ExecStart=/usr/bin/sni-watcher
-Restart=on-failure
-RestartSec=1
+# The registry is mirrored to $XDG_RUNTIME_DIR/sni-watcher/items and restored
+# on start, so a crash comes back with the same list. Come back immediately.
+Restart=always
+RestartSec=0
+# Do not be the kernel's first choice under memory pressure.
+OOMScoreAdjust=-900
 StandardOutput=journal
 StandardError=journal
 
 [Install]
-WantedBy=graphical-session.target
+WantedBy=graphical-session-pre.target
