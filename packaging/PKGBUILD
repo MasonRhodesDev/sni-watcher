@@ -8,7 +8,7 @@
 
 pkgname=sni-watcher
 pkgver=0.3.0
-pkgrel=1
+pkgrel=2
 pkgdesc="Standalone StatusNotifierWatcher daemon so the tray registry survives bar restarts"
 arch=('x86_64' 'aarch64')
 url="https://github.com/MasonRhodesDev/sni-watcher"
