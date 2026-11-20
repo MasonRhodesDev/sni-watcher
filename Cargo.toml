@@ -11,7 +11,7 @@ name = "sni-watcher"
 path = "src/main.rs"
 
 [dependencies]
-zbus = { version = "5", default-features = false, features = ["tokio"] }
+zbus = { version = "6", default-features = false, features = ["tokio", "proxy", "service", "tracing"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
 anyhow = "1"
 futures-util = "0.3"
