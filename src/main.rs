@@ -321,7 +321,7 @@ async fn main() -> Result<()> {
     let conn = zbus::connection::Builder::session()
         .build()
         .await
-        .context("failed to connect to the session bus")?;
+        .context("failed to build the D-Bus connection")?;
 
     // Restore the registry a previous instance mirrored to disk, keeping only
     // items whose bus connection is still alive. Apps that register exactly
