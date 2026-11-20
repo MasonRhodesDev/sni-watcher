@@ -16,8 +16,8 @@ use std::sync::Mutex;
 
 use anyhow::{Context, Result};
 use futures_util::StreamExt;
-use zbus::fdo::{DBusProxy, RequestNameFlags, RequestNameReply};
 use std::path::PathBuf;
+use zbus::fdo::{DBusProxy, RequestNameFlags, RequestNameReply};
 use zbus::message::Header;
 use zbus::names::WellKnownName;
 use zbus::object_server::SignalEmitter;
@@ -316,8 +316,9 @@ async fn main() -> Result<()> {
 
     let name = WellKnownName::try_from(WATCHER_NAME).context("invalid well-known name")?;
 
+    // zbus 6 defers the session address lookup to build(), so one context
+    // covers both a missing bus address and a failed connect.
     let conn = zbus::connection::Builder::session()
-        .context("failed to connect to the session bus")?
         .build()
         .await
         .context("failed to build the D-Bus connection")?;
@@ -363,7 +364,7 @@ async fn main() -> Result<()> {
     let reply = conn
         .request_name_with_flags(
             name,
-            RequestNameFlags::ReplaceExisting | RequestNameFlags::DoNotQueue,
+            RequestNameFlags::REPLACE_EXISTING | RequestNameFlags::DO_NOT_QUEUE,
         )
         .await
         .context("RequestName failed")?;
@@ -443,8 +444,14 @@ mod tests {
     #[test]
     fn state_round_trips_and_skips_malformed_lines() {
         let items = vec![
-            reg("org.freedesktop.StatusNotifierItem-1-1/StatusNotifierItem/1", ":1.500"),
-            reg(":1.132/org/ayatana/NotificationItem/indicator_solaar", ":1.132"),
+            reg(
+                "org.freedesktop.StatusNotifierItem-1-1/StatusNotifierItem/1",
+                ":1.500",
+            ),
+            reg(
+                ":1.132/org/ayatana/NotificationItem/indicator_solaar",
+                ":1.132",
+            ),
         ];
         let text = render_state(&items);
         let back = parse_state(&format!("{text}\nno-tab-here\n\t:1.9\n"));
